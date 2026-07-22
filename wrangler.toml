@@ -7,6 +7,17 @@ directory = "./public"
 binding = "ASSETS"
 run_worker_first = ["/api/*"]
 
+# 옛 KV 랭킹 — D1 이관용으로만 남겨둔다 (POST /api/admin/migrate)
 [[kv_namespaces]]
 binding = "RANKS"
 id = "6d5b29e3ae8e417c8b48979724b2f49e"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sonar-sweep-ranks"
+database_id = "8ed8ad70-eb65-45be-a10b-f0e3eacca901"
+
+# 시즌 자동 마감 — 테스트용 1일 주기. cron은 UTC 기준이라 매일 09:00 KST에 돈다.
+# 운영 전환 시 월 1회("0 0 1 * *") 등으로 바꿀 것.
+[triggers]
+crons = ["0 0 * * *"]

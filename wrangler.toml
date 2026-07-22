@@ -1,0 +1,12 @@
+name = "sonar-sweep-rank"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[kv_namespaces]]
+binding = "RANKS"
+id = "6d5b29e3ae8e417c8b48979724b2f49e"

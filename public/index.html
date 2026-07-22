@@ -1,0 +1,1885 @@
+﻿<!doctype html>
+<meta charset="utf-8">
+<title>상륙부대 공병단의 지뢰찾기</title>
+<style>
+  :root{
+    --bg:#060B14;
+    --panel:#0B1626;
+    --panel-edge:#14263D;
+    --tile-hi:#1E3450;
+    --tile:#152840;
+    --reveal:#0A1421;
+    --line:#223A57;
+    --accent:#3FE0B0;
+    --accent-soft:rgba(63,224,176,.14);
+    --amber:#FFB454;
+    --red:#FF5D5D;
+    --text:#D7E6F2;
+    --muted:#5E7893;
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"SF Mono",Menlo,monospace;
+    --sans:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
+  }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+
+  html,body{margin:0;padding:0;overflow:hidden}
+  body{
+    min-height:100vh;
+    background:
+      radial-gradient(1100px 700px at 50% -10%, rgba(63,224,176,.06), transparent 60%),
+      radial-gradient(900px 900px at 50% 120%, rgba(20,60,90,.25), transparent 65%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:16px 16px 24px;
+    user-select:none;
+    -webkit-user-select:none;
+  }
+  /* faint instrument grid over the whole page */
+  body::before{
+    content:"";
+    position:fixed;inset:0;
+    background:
+      repeating-linear-gradient(0deg, rgba(120,180,220,.03) 0 1px, transparent 1px 44px),
+      repeating-linear-gradient(90deg, rgba(120,180,220,.03) 0 1px, transparent 1px 44px);
+    pointer-events:none;
+  }
+
+  /* ---------- header ---------- */
+  header{text-align:center;margin-bottom:12px;position:relative;z-index:1}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.42em;
+    color:var(--accent);
+    text-transform:uppercase;
+    margin-bottom:6px;
+  }
+  .eyebrow::before,.eyebrow::after{content:"——";color:#1E3A52;letter-spacing:0;margin:0 12px}
+  h1{
+    margin:0;
+    font-size:clamp(20px,3.4vw,30px);
+    font-weight:800;
+    letter-spacing:.1em;
+    text-wrap:balance;
+  }
+  .sub{
+    margin-top:5px;
+    font-size:12px;
+    color:var(--muted);
+    letter-spacing:.06em;
+  }
+
+  /* ---------- console panel ---------- */
+  .console{
+    position:relative;z-index:1;
+    background:linear-gradient(180deg,#0D1A2C,var(--panel) 30%);
+    border:1px solid var(--panel-edge);
+    border-radius:14px;
+    padding:14px;
+    box-shadow:
+      0 30px 60px -20px rgba(0,0,0,.7),
+      inset 0 1px 0 rgba(255,255,255,.05);
+    max-width:100%;
+  }
+
+  /* ---------- HUD ---------- */
+  .hud{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    margin-bottom:10px;
+  }
+  .readout{
+    display:flex;flex-direction:column;gap:4px;
+    min-width:96px;
+  }
+  .readout .label{
+    font-family:var(--mono);
+    font-size:10px;
+    letter-spacing:.3em;
+    color:var(--muted);
+    text-transform:uppercase;
+  }
+  .readout .value{
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+    font-size:22px;
+    font-weight:700;
+    color:var(--accent);
+    text-shadow:0 0 12px rgba(63,224,176,.45);
+    background:#050B13;
+    border:1px solid #16283E;
+    border-radius:8px;
+    padding:4px 12px;
+    box-shadow:inset 0 2px 8px rgba(0,0,0,.6);
+    text-align:center;
+  }
+  .readout.right .label{text-align:right}
+  .readout .value.alert{color:var(--red);text-shadow:0 0 12px rgba(255,93,93,.5)}
+
+  #resetBtn{
+    width:48px;height:48px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:linear-gradient(145deg,var(--tile-hi),var(--tile));
+    color:var(--accent);
+    font-size:20px;
+    cursor:pointer;
+    box-shadow:0 4px 10px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+    transition:transform .15s ease, box-shadow .15s ease;
+    display:grid;place-items:center;
+    line-height:1;
+  }
+  #resetBtn:hover{transform:translateY(-2px) rotate(90deg);box-shadow:0 8px 18px rgba(0,0,0,.55),0 0 16px var(--accent-soft)}
+  #resetBtn:active{transform:translateY(1px)}
+  #resetBtn.lost{color:var(--red)}
+  #resetBtn.won{color:var(--amber)}
+
+  /* ---------- status line ---------- */
+  .status{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    color:var(--muted);
+    text-align:center;
+    margin:14px 0 2px;
+    min-height:16px;
+  }
+  .status.win{color:var(--accent)}
+  .status.lose{color:var(--red)}
+  .status .blink{animation:blink 1.2s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ---------- board ---------- */
+  .board-scroll{overflow:visible;padding:4px;margin:0 -4px}
+  .board-wrap{position:relative;width:max-content;margin:0 auto}
+  #board{
+    display:grid;
+    grid-template-columns:repeat(var(--cols), var(--cell));
+    gap:4px;
+    --cell:clamp(22px, min(calc((100vw - 140px) / var(--cols)), calc((100vh - 400px) / (var(--rows,9) + var(--apr,0)))), 38px);
+  }
+  #board.shake{animation:shake .5s ease}
+  @keyframes shake{
+    0%,100%{transform:translate(0,0)}
+    20%{transform:translate(-5px,2px)}
+    40%{transform:translate(5px,-3px)}
+    60%{transform:translate(-4px,-2px)}
+    80%{transform:translate(3px,3px)}
+  }
+
+  .cell{
+    width:var(--cell);height:var(--cell);
+    padding:0;border-radius:5px;
+    border:1px solid var(--line);
+    background:linear-gradient(145deg,var(--tile-hi),var(--tile));
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.08),
+      inset 0 -2px 0 rgba(0,0,0,.35),
+      0 2px 3px rgba(0,0,0,.4);
+    cursor:pointer;
+    font-family:var(--mono);
+    font-variant-numeric:tabular-nums;
+    font-weight:700;
+    font-size:calc(var(--cell) * .48);
+    color:var(--text);
+    display:grid;place-items:center;
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+    position:relative;
+  }
+  .cell:hover:not(.open){
+    transform:translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.1),
+      inset 0 -2px 0 rgba(0,0,0,.35),
+      0 6px 12px rgba(0,0,0,.5),
+      0 0 12px var(--accent-soft);
+    border-color:#2E5A6F;
+  }
+  .cell:active:not(.open){transform:translateY(1px) scale(.96)}
+  .cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+  .cell.open{
+    background:var(--reveal);
+    border-color:#132238;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.55);
+    cursor:default;
+  }
+  .cell.open span{animation:pop .28s cubic-bezier(.3,1.4,.5,1) both}
+  @keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+
+  .cell.flagged{color:var(--amber);text-shadow:0 0 10px rgba(255,180,84,.5)}
+  /* flag drops in from above, squashes on impact — shockwave fires on landing (JS) */
+  .cell.flagged span{
+    display:block;position:relative;z-index:3;
+    animation:flagDrop .3s cubic-bezier(.5,0,.7,.35) both;
+  }
+  @keyframes flagDrop{
+    0%  {transform:translateY(calc(var(--cell) * -1.8)) scale(1.3);opacity:0}
+    12% {opacity:1}
+    64% {transform:translateY(0) scale(1)}
+    78% {transform:translateY(calc(var(--cell) * .05)) scale(1.3,.62)}
+    100%{transform:translateY(0) scale(1)}
+  }
+
+  .cell.wrong{color:var(--red)}
+  .cell.wrong::after{
+    content:"✕";position:absolute;inset:0;display:grid;place-items:center;
+    color:var(--red);font-size:calc(var(--cell)*.6);opacity:.9;
+  }
+
+  .cell .dot{
+    width:46%;height:46%;border-radius:50%;
+    background:radial-gradient(circle at 35% 35%, #FF9B9B, var(--red) 55%, #7A1D1D);
+    box-shadow:0 0 12px rgba(255,93,93,.8), 0 0 26px rgba(255,93,93,.4);
+  }
+  .cell.boom{background:#2A0D12;border-color:#5A1C22}
+  .cell.boom .dot{animation:boomPulse .6s ease both}
+  @keyframes boomPulse{
+    0%{transform:scale(.3)}
+    40%{transform:scale(1.5)}
+    100%{transform:scale(1)}
+  }
+
+  /* number spectrum */
+  .n1{color:#57B6FF}.n2{color:#3FE0B0}.n3{color:#FFB454}.n4{color:#C792EA}
+  .n5{color:#FF5D5D}.n6{color:#4DD0E1}.n7{color:#E8D44D}.n8{color:#FF8FB3}
+
+  /* ---------- THE WAVE ---------- */
+  .cell.wave{
+    animation:wave .55s cubic-bezier(.34,1.35,.4,1) both;
+    z-index:2;
+  }
+  @keyframes wave{
+    0%  {transform:translateY(0) scale(1);       filter:brightness(1)}
+    32% {transform:translateY(var(--wy,-7px)) scale(var(--ws,1.05)); filter:brightness(var(--wb,1.45))}
+    100%{transform:translateY(0) scale(1);       filter:brightness(1)}
+  }
+  /* 클릭 인터랙션 — 해당 타일만 살짝 반짝 */
+  .cell.flash{animation:cellFlash .25s ease both}
+  @keyframes cellFlash{
+    0%{filter:brightness(1)}
+    30%{filter:brightness(1.85)}
+    100%{filter:brightness(1)}
+  }
+  .cell.winwave{animation:winwave .7s ease both;z-index:2}
+  @keyframes winwave{
+    0%  {filter:brightness(1);box-shadow:inset 0 2px 6px rgba(0,0,0,.55)}
+    40% {filter:brightness(1.6);box-shadow:0 0 18px rgba(63,224,176,.7);transform:translateY(-6px)}
+    100%{filter:brightness(1);transform:translateY(0)}
+  }
+
+  /* debris particle overlay */
+  #fx{position:absolute;inset:0;pointer-events:none;z-index:4}
+
+  /* sonar ping ring */
+  .ping{
+    position:absolute;
+    width:20px;height:20px;
+    margin:-10px 0 0 -10px;
+    border:2px solid var(--accent);
+    border-radius:50%;
+    pointer-events:none;
+    animation:ping .7s ease-out forwards;
+    z-index:5;
+  }
+  .ping.amber{border-color:var(--amber)}
+  .ping.red{border-color:var(--red)}
+  @keyframes ping{
+    from{transform:scale(1);opacity:.85}
+    to{transform:scale(9);opacity:0}
+  }
+
+  /* ---------- difficulty + footer ---------- */
+  .tabs{
+    display:flex;gap:8px;justify-content:center;
+    margin-top:16px;
+  }
+  .tabs button{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.16em;
+    padding:8px 18px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .tabs button:hover{color:var(--text);border-color:#2E5A6F}
+  .tabs button.active{
+    color:#04110C;
+    background:var(--accent);
+    border-color:var(--accent);
+    box-shadow:0 0 16px rgba(63,224,176,.4);
+    font-weight:700;
+  }
+
+  .footer{
+    display:flex;align-items:center;justify-content:center;gap:18px;
+    margin-top:18px;flex-wrap:wrap;
+    font-size:12px;color:var(--muted);letter-spacing:.04em;
+  }
+  .footer .best{font-family:var(--mono);color:var(--amber)}
+  #soundBtn,#flagModeBtn{
+    background:transparent;border:1px solid var(--line);border-radius:8px;
+    color:var(--muted);font-family:var(--mono);font-size:11px;
+    letter-spacing:.1em;padding:6px 12px;cursor:pointer;transition:all .15s ease;
+  }
+  #soundBtn:hover,#flagModeBtn:hover{color:var(--text);border-color:#2E5A6F}
+  #flagModeBtn.on{color:var(--amber);border-color:var(--amber);box-shadow:0 0 10px rgba(255,180,84,.25)}
+
+  .hint{
+    margin-top:14px;text-align:center;
+    font-size:12px;color:#43597200;color:var(--muted);opacity:.75;
+    letter-spacing:.03em;line-height:1.7;
+  }
+  .hint kbd{
+    font-family:var(--mono);font-size:11px;color:var(--text);
+    background:#0F1E31;border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:4px;padding:1px 6px;
+  }
+
+  /* ---------- 작전 프로토 (operation mode) ---------- */
+  #war{position:absolute;inset:0;pointer-events:none;z-index:7}
+  .bunker-wrap{position:relative;display:grid;place-items:center}
+  #hpRing{
+    position:absolute;inset:-7px;border-radius:50%;pointer-events:none;
+    background:
+      conic-gradient(var(--amber) calc(var(--ovr,0)*360deg), transparent 0),
+      conic-gradient(var(--red) calc(var(--hp,1)*360deg), rgba(255,93,93,.14) 0);
+    -webkit-mask:radial-gradient(closest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+    mask:radial-gradient(closest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+    opacity:0;transition:opacity .3s ease;
+  }
+  #hpRing.show{opacity:1}
+  #resetBtn.enemy{color:var(--red);border-color:#5A1C22}
+  #apron{height:0}
+  .bottomrow{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:8px}
+  #prepBar{
+    display:none;position:relative;height:16px;flex:1;
+    border:1px solid var(--line);border-radius:999px;overflow:hidden;
+    background:#050B13;box-shadow:inset 0 2px 6px rgba(0,0,0,.6);
+  }
+  #prepBar.show{display:block}
+  /* 폭은 매 프레임 직접 갱신 — transition을 두면 렌더 지연이 쌓여 번쩍 때 폭락처럼 보인다 */
+  #prepFill{
+    height:100%;width:100%;
+    background:linear-gradient(90deg,#8A5A20,var(--amber));
+    box-shadow:0 0 12px rgba(255,180,84,.45);
+  }
+  #prepFill.gain{
+    background:linear-gradient(90deg,#1F6B4C,var(--accent));
+    box-shadow:0 0 14px rgba(63,224,176,.55);
+  }
+  #prepLabel{
+    position:absolute;inset:0;display:grid;place-items:center;
+    font-family:var(--mono);font-size:10px;letter-spacing:.24em;
+    color:var(--text);text-shadow:0 1px 3px rgba(0,0,0,.9);
+  }
+  #chargeBtn{
+    display:none;margin:12px auto -2px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    padding:7px 20px;border-radius:999px;cursor:pointer;
+    color:#04110C;background:var(--amber);border:1px solid var(--amber);
+    box-shadow:0 0 14px rgba(255,180,84,.35);font-weight:700;
+  }
+  #chargeBtn.show{display:block}
+  /* 전장 이벤트 토스트 — 하단 여백(스폰 지대)에 크게, 지뢰밭을 가리지 않는다 */
+  #toasts{
+    position:absolute;left:50%;bottom:100px;transform:translateX(-50%);
+    display:flex;flex-direction:column;justify-content:flex-end;gap:8px;align-items:center;
+    z-index:9;pointer-events:none;width:max-content;max-width:92%;
+  }
+  .toast{
+    font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.14em;
+    color:var(--text);background:rgba(8,16,28,.94);border:1px solid var(--line);
+    border-radius:10px;padding:9px 22px;white-space:nowrap;
+    box-shadow:0 8px 24px rgba(0,0,0,.6);
+    animation:toastIn .25s ease both, toastOut .4s ease 2.2s both;
+  }
+  .toast.red{color:var(--red);border-color:#5A1C22}
+  .toast.amber{color:var(--amber);border-color:#8A5A20}
+  .toast.teal{color:var(--accent);border-color:#1F6B4C}
+  @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes toastOut{to{opacity:0;transform:translateY(8px)}}
+  /* 오폭으로 벙커 HP가 늘어날 때 링 강조 */
+  #hpRing.surge{animation:hpSurge .5s ease both}
+  @keyframes hpSurge{
+    0%{transform:scale(1);filter:brightness(1)}
+    35%{transform:scale(1.28);filter:brightness(1.9)}
+    100%{transform:scale(1);filter:brightness(1)}
+  }
+  /* 게임 결과 팝업 */
+  #resultOverlay{
+    position:fixed;inset:0;display:none;place-items:center;
+    background:rgba(4,8,16,.6);backdrop-filter:blur(3px);z-index:50;
+  }
+  #resultOverlay.show{display:grid}
+  .result-card{
+    background:linear-gradient(180deg,#0D1A2C,var(--panel));
+    border:1px solid var(--panel-edge);border-radius:14px;
+    padding:28px 48px;text-align:center;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,.8);
+    animation:cardIn .35s cubic-bezier(.3,1.3,.5,1) both;
+  }
+  @keyframes cardIn{from{opacity:0;transform:translateY(14px) scale(.92)}to{opacity:1;transform:none}}
+  .result-verdict{font-family:var(--mono);font-size:22px;font-weight:800;letter-spacing:.2em;margin-bottom:16px}
+  .result-verdict.win{color:var(--accent);text-shadow:0 0 16px rgba(63,224,176,.5)}
+  .result-verdict.lose{color:var(--red);text-shadow:0 0 16px rgba(255,93,93,.5)}
+  .result-label{font-family:var(--mono);font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase}
+  .result-count{
+    font-family:var(--mono);font-variant-numeric:tabular-nums;
+    font-size:46px;font-weight:800;color:var(--text);margin:6px 0 2px;
+  }
+  /* 생존 숫자 — 대형 반투명 숫자가 낙하해 꽂힌다 */
+  .result-count.stamp{animation:countStamp .55s cubic-bezier(.22,.9,.32,1.12) both}
+  @keyframes countStamp{
+    0%{opacity:0;transform:translateY(-52px) scale(3.2)}
+    12%{opacity:.22}
+    70%{opacity:1;transform:translateY(0) scale(1)}
+    82%{transform:translateY(2px) scale(1.08,.92)}
+    100%{opacity:1;transform:translateY(0) scale(1)}
+  }
+  .result-count.final{color:var(--accent);text-shadow:0 0 18px rgba(63,224,176,.55)}
+  .result-count.final.lose{color:var(--red);text-shadow:0 0 18px rgba(255,93,93,.55)}
+  .result-card.impact{animation:cardImpact .28s ease}
+  @keyframes cardImpact{30%{transform:translateY(3px)}60%{transform:translateY(-1px)}}
+  .result-sub{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em;margin-top:6px}
+  .rank-sec{margin-top:16px;border-top:1px solid var(--panel-edge);padding-top:14px;min-width:250px}
+  .rank-head{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--muted);margin-bottom:8px}
+  .rank-name-row{display:flex;gap:6px;justify-content:center;margin-bottom:10px}
+  #rankName{
+    font-family:var(--mono);font-size:12px;letter-spacing:.08em;width:130px;
+    background:#050B13;border:1px solid var(--line);border-radius:6px;
+    color:var(--text);padding:6px 10px;outline:none;text-align:center;
+  }
+  #rankName:focus{border-color:var(--accent)}
+  #rankSave{
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:6px 14px;
+    border-radius:6px;border:1px solid var(--accent);background:var(--accent);
+    color:#04110C;font-weight:700;cursor:pointer;
+  }
+  #rankSave:disabled{opacity:.55;cursor:default}
+  #rankList,#rankViewList{
+    list-style:none;margin:0;padding:0;counter-reset:rk;
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--text);
+    display:flex;flex-direction:column;gap:4px;text-align:left;
+  }
+  #rankList li,#rankViewList li{counter-increment:rk;padding:3px 8px;border-radius:4px}
+  #rankList li::before,#rankViewList li::before{content:counter(rk) "  ";color:var(--amber);font-weight:700}
+  .rk-s{color:var(--accent);font-weight:700}
+  #rankList li.rank-mine,#rankViewList li.rank-mine{background:rgba(63,224,176,.12);color:var(--accent)}
+  #rankList li.rank-empty,#rankViewList li.rank-empty{color:var(--muted)}
+  #rankList li.rank-empty::before,#rankViewList li.rank-empty::before{content:""}
+  #rankViewList{min-width:230px;min-height:120px}
+  #resultClose,#rankViewClose{
+    margin-top:18px;font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    padding:8px 26px;border-radius:999px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);cursor:pointer;transition:all .15s ease;
+  }
+  #resultClose:hover,#rankViewClose:hover{color:var(--text);border-color:#2E5A6F}
+  .speed{display:none;gap:4px}
+  .speed.show{display:flex}
+  #rankBtn{
+    font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    padding:4px 10px;border-radius:6px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);cursor:pointer;
+    margin-right:auto;transition:all .15s ease;
+  }
+  #rankBtn:hover{color:var(--amber);border-color:#8A5A20}
+  #rankOverlay{
+    position:fixed;inset:0;display:none;place-items:center;
+    background:rgba(4,8,16,.6);backdrop-filter:blur(3px);z-index:50;
+  }
+  #rankOverlay.show{display:grid}
+  .rank-card .tabs{margin:0 0 14px;justify-content:center}
+  .speed button{
+    font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    padding:4px 8px;border-radius:6px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);cursor:pointer;
+    transition:all .15s ease;
+  }
+  .speed button:hover{color:var(--text);border-color:#2E5A6F}
+  .speed button.active{color:#04110C;background:var(--accent);border-color:var(--accent);font-weight:700}
+  .topbar{
+    display:flex;justify-content:space-between;align-items:center;
+    gap:8px 14px;flex-wrap:wrap;margin-bottom:14px;
+  }
+  .topbar .tabs{margin-top:0;justify-content:flex-start}
+  .topbar .tabs button{padding:6px 12px;font-size:11px}
+
+  @media (prefers-reduced-motion:reduce){
+    .cell.wave,.cell.winwave,.cell.flash,.cell.open span,.cell.flagged span,.cell.boom .dot,.result-card,.result-count.stamp,.result-card.impact,#hpRing.surge{animation:none}
+    .ping{display:none}
+    #board.shake{animation:none}
+    .cell,.tabs button,#resetBtn{transition:none}
+  }
+</style>
+
+<header>
+  <div class="eyebrow">상륙부대 공병단의</div>
+  <h1>지뢰찾기</h1>
+  <div class="sub">상륙부대의 길을 개척해서 전투를 승리로 이끄세요</div>
+</header>
+
+<div class="console" id="console">
+  <div class="topbar">
+    <div class="tabs" id="tabs">
+      <button data-d="easy">초급 9×9</button>
+      <button data-d="medium" class="active">중급 16×16</button>
+      <button data-d="hard">고급 24×16</button>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="readout">
+      <span class="label">Mines</span>
+      <span class="value" id="mineCount">010</span>
+    </div>
+    <div class="bunker-wrap">
+      <div id="hpRing" style="--hp:1"></div>
+      <button id="resetBtn" title="새 게임" aria-label="새 게임">◎</button>
+    </div>
+    <div class="readout right">
+      <span class="label">Time</span>
+      <span class="value" id="timer">000</span>
+    </div>
+  </div>
+
+  <div class="board-scroll">
+    <div class="board-wrap" id="boardWrap">
+      <div id="board" role="grid" aria-label="지뢰찾기 보드"></div>
+      <canvas id="fx"></canvas>
+    </div>
+  </div>
+
+  <div id="apron"></div>
+  <button id="chargeBtn">▶ 조기 돌격</button>
+
+  <div class="bottomrow">
+    <button id="rankBtn">🏆 랭킹</button>
+    <div id="prepBar"><div id="prepFill"></div><span id="prepLabel"></span></div>
+    <div class="speed show" id="speedBtns">
+      <button data-s="1" class="active">×1</button>
+      <button data-s="2">×2</button>
+      <button data-s="4">×4</button>
+    </div>
+  </div>
+
+  <div class="status" id="status" style="display:none">해역 스캔 대기 중<span class="blink">_</span></div>
+
+  <div id="toasts"></div>
+
+  <canvas id="war"></canvas>
+</div>
+
+<div class="footer">
+  <button id="flagModeBtn" title="탭하면 깃발을 놓는 모드">⚑ 깃발 모드</button>
+  <button id="soundBtn">♪ 소리 켜짐</button>
+</div>
+
+<p class="hint">
+  <kbd>좌클릭</kbd> 구역 개방 · <kbd>우클릭</kbd> / <kbd>길게 누르기</kbd> 깃발 ·
+  숫자를 다시 클릭하면 깃발 수가 맞을 때 주변을 한 번에 엽니다
+</p>
+
+<div id="resultOverlay">
+  <div class="result-card">
+    <div class="result-verdict" id="resultVerdict">작전 성공</div>
+    <div class="result-label">생존 병력</div>
+    <div class="result-count" id="resultCount">0</div>
+    <div class="result-sub" id="resultSub"></div>
+    <div class="rank-sec">
+      <div class="rank-head">🏆 <span id="rankScope">랭킹</span></div>
+      <div class="rank-name-row" id="rankNameRow">
+        <input id="rankName" maxlength="12" placeholder="호출명" autocomplete="off">
+        <button id="rankSave">기록 등록</button>
+      </div>
+      <ol id="rankList"><li class="rank-empty">불러오는 중…</li></ol>
+    </div>
+    <button id="resultClose">확인</button>
+  </div>
+</div>
+
+<div id="rankOverlay">
+  <div class="result-card rank-card">
+    <div class="rank-head">🏆 <span id="rankViewScope">랭킹</span></div>
+    <div class="tabs" id="rankTabs">
+      <button data-rd="easy">초급</button>
+      <button data-rd="medium">중급</button>
+      <button data-rd="hard">고급</button>
+    </div>
+    <ol id="rankViewList"><li class="rank-empty">불러오는 중…</li></ol>
+    <button id="rankViewClose">닫기</button>
+  </div>
+</div>
+
+<p class="hint" id="protoHint">
+  <b style="color:var(--accent)">작전 요령</b> — 카운트다운 동안 지뢰를 찾아 <kbd>깃발</kbd>로 표시하세요.
+  병사들은 깃발이 꽂힌 칸을 피해 타일 틈새로 우회합니다.<br>
+  구역을 열수록 돌격 시간이 회복되고(시작 시간까지), 표시하지 못한 지뢰는 행군하는 병사를 덮칩니다.<br>
+  지뢰를 직접 터뜨리면 적 벙커가 최대치의 20%만큼 강화됩니다(노란 링). 살아남은 병사들이 벙커(◎)를 파괴하면 작전 성공입니다.
+</p>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ---------- config ---------- */
+  const DIFFS = {
+    easy:   { cols: 9,  rows: 9,  mines: 10 },
+    medium: { cols: 16, rows: 16, mines: 40 },
+    hard:   { cols: 24, rows: 16, mines: 99 },
+  };
+  const WAVE_RADIUS = 3.6;      // tiles affected by the ripple
+  const WAVE_STEP_MS = 38;      // delay per tile of distance
+  const REVEAL_STEP_MS = 34;    // flood-fill visual stagger per BFS depth
+  const FLAG_IMPACT_MS = 195;   // when the falling flag hits the tile (64% of .3s drop)
+
+  // debris presets: n particles, speed px/s, upward kick, palette, size range, life s, gravity
+  const SHARD_OPEN = { n: 11, speed: 115, up: 95,  colors: ["#2E5070", "#1E3450", "#152840", "#3FE0B0"], size: [2, 4.5], ttl: 0.5,  g: 560 };
+  const SHARD_FLAG = { n: 14, speed: 95,  up: 60,  colors: ["#FFB454", "#FFD27A", "#8A6A34"],            size: [1.5, 3.5], ttl: 0.45, g: 500 };
+  const SHARD_BOOM = { n: 39, speed: 270, up: 130, colors: ["#FF5D5D", "#FF9B6B", "#FFD27A", "#7A1D1D"], size: [2, 6],   ttl: 0.8,  g: 420 };
+  const SHARD_MINE = { n: 6,  speed: 75,  up: 45,  colors: ["#FF5D5D", "#7A1D1D"],                       size: [1.5, 3], ttl: 0.4,  g: 450 };
+
+  /* ---------- 작전 프로토 config ---------- */
+  const PROTO = {
+    prep:   { easy: 30, medium: 57, hard: 83 },    // 공병 작업(카운트다운) 시간, 초
+    troops: { easy: 12, medium: 24, hard: 36 },    // 투입 병력
+    hp:     { easy: 45, medium: 68, hard: 90 },    // 벙커 내구도
+    mistakeHp: 0.2,        // 지뢰 오폭 1회마다 벙커가 최대치의 이 비율만큼 강화
+    openBonus: 0.2,        // 스윕 중 타일 1칸 열 때마다 돌격이 이만큼(초) 늦춰짐 (시작 시간이 상한)
+    earlyBonusMax: 0.10,   // 조기 돌격 증원 상한 — 남은 시간 비율 × 병력의 10%
+    spawnMs: 440,          // 병사 스폰 간격
+    speed: 18,             // 행군 속도 px/s
+    sprintMul: 1.6,        // 보드를 벗어나 벙커로 달려들 때 가속 배율
+    blastTiles: 0.95,      // 지뢰 폭발 반경(타일)
+    burstGapMs: 200,       // 점사 내 발사 간격 — 땅땅땅땅땅 (촘촘하게)
+    reloadMs: 1840,        // 장전 대기 — 평균 발사율은 기존과 동일(528ms/발)
+    burstShots: 6,         // 땅땅땅땅땅땅 — 연속 6발 쏘고 장전
+    rangeTiles: 2.5,       // 벙커 사거리(타일)
+    hitMs: 400,            // 병사 1인당 벙커 타격 간격
+    attackDist: 72,        // 벙커 공격을 시작하는 사거리 px (원거리 사격)
+    soldierHp: 3,          // 벙커 총알 세 발을 맞아야 전사 (지뢰는 즉사)
+  };
+  const SHARD_KILL = { n: 8, speed: 130, up: 55, colors: ["#FF5D5D", "#FF9B6B", "#8FE8C4"], size: [1.5, 3.5], ttl: 0.5, g: 480 };
+
+  /* ---------- state ---------- */
+  let diff = "medium";
+  let cols, rows, mines;
+  let grid = [];        // {mine, adj, open, flag}
+  let els = [];
+  let started = false, over = false;
+  let openCount = 0, flagCount = 0;
+  let time = 0, timerOn = false;
+  let flagMode = false;
+
+  /* 작전 state — 단일 모드 (클래식 통합 제거) */
+  const mode = "proto";
+  let phase = "idle";              // proto: idle → sweep → assault → done
+  let prepLeft = 0;
+  let detCount = 0;
+  let soldiers = [], warParts = [], tracers = [], spawnBag = [];
+  let bunker = null, G = null;
+  let troopsTotal = 0, spawnLeft = 0, spawnClock = 0, aliveCount = 0;
+  let warRaf = 0, warTimer = 0, warLast = 0, doneAt = 0, statusClock = 0;
+  let mistakeCount = 0;            // 플레이어가 직접 터뜨린 지뢰 수 → 벙커 강화
+  let gameSpeed = 1, warNow = 0;   // 가속 배율과 전투 가상 시계(ms)
+  let resultTimer = 0, countTimer = 0;   // 결과 팝업 지연·카운트업 타이머
+  let timeAcc = 0, timeLastT = 0;  // 미션 타이머 실경과 누적(게임초)
+  let prepLastT = 0;               // 카운트다운 마지막 틱 시각
+
+  const $ = (id) => document.getElementById(id);
+  const board = $("board"), wrap = $("boardWrap");
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- audio ---------- */
+  const SFX = {
+    on: true, ctx: null,
+    ensure() {
+      if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+      if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+    },
+    tone(f0, f1, dur, type, gain) {
+      if (!this.on) return;
+      this.ensure();
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t);
+      o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(this.ctx.destination);
+      o.start(t); o.stop(t + dur + 0.02);
+    },
+    ping()   { this.tone(620, 940, 0.11, "sine", 0.045); },
+    tick()   { this.tone(880, 720, 0.04, "sine", 0.02); },
+    flag()   { this.tone(300, 380, 0.07, "square", 0.03); },
+    unflag() { this.tone(380, 260, 0.07, "square", 0.025); },
+    boom()   { this.tone(160, 36, 0.55, "sawtooth", 0.12); this.tone(90, 30, 0.7, "triangle", 0.1); },
+    win() {
+      [523, 659, 784, 1047].forEach((f, i) =>
+        setTimeout(() => this.tone(f, f * 1.01, 0.18, "sine", 0.05), i * 110));
+    },
+    shot()  { this.tone(1150, 320, 0.06, "square", 0.03); },
+    thud()  { this.tone(190, 120, 0.07, "square", 0.045); },
+    die()   { this.tone(260, 70, 0.16, "sawtooth", 0.035); },
+    horn() {
+      this.tone(196, 392, 0.25, "triangle", 0.06);
+      setTimeout(() => this.tone(262, 523, 0.3, "triangle", 0.06), 180);
+    },
+    resultTick(i) { this.tone(900 + (i % 2) * 140, 950, 0.03, "square", 0.025); },
+    resultDing() {
+      this.tone(880, 1320, 0.12, "sine", 0.05);
+      setTimeout(() => this.tone(1174, 1760, 0.18, "sine", 0.05), 90);
+    },
+    stamp() {
+      this.tone(150, 55, 0.22, "square", 0.08);      // 쿵 — 꽂히는 임팩트
+      setTimeout(() => this.tone(880, 1320, 0.14, "sine", 0.05), 110);
+    },
+  };
+
+  /* ---------- helpers ---------- */
+  const idx = (r, c) => r * cols + c;
+  const inB = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols;
+  function neighbors(i) {
+    const r = (i / cols) | 0, c = i % cols, out = [];
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      if (inB(r + dr, c + dc)) out.push(idx(r + dr, c + dc));
+    }
+    return out;
+  }
+  const pad3 = (n) => (n < 0 ? "-" + String(Math.min(99, -n)).padStart(2, "0")
+                             : String(Math.min(999, n)).padStart(3, "0"));
+
+  function updateMineReadout() {
+    const left = mines - flagCount - detCount;
+    $("mineCount").textContent = pad3(left);
+    $("mineCount").classList.toggle("alert", left < 0);
+  }
+
+  /* ---------- persistence (클래식 최고기록 UI 제거 — 랭킹으로 대체) ---------- */
+  function loadBest() {}
+  function saveBest() {}
+
+  /* ---------- setup ---------- */
+  function newGame() {
+    ({ cols, rows, mines } = DIFFS[diff]);
+    grid = Array.from({ length: cols * rows }, () => ({ mine: false, adj: 0, open: false, flag: false }));
+    started = false; over = false; openCount = 0; flagCount = 0; time = 0;
+    timerOn = false;
+
+    board.style.setProperty("--cols", cols);
+    board.style.setProperty("--rows", rows);
+    board.style.setProperty("--apr", mode === "proto" ? 3 : 0);
+    board.classList.remove("shake");
+    board.innerHTML = "";
+    els = [];
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < cols * rows; i++) {
+      const b = document.createElement("button");
+      b.className = "cell";
+      b.dataset.i = i;
+      b.setAttribute("role", "gridcell");
+      frag.appendChild(b);
+      els.push(b);
+    }
+    board.appendChild(frag);
+
+    $("mineCount").textContent = pad3(mines);
+    $("mineCount").classList.remove("alert");
+    $("timer").textContent = "000";
+    $("resetBtn").textContent = "◎";
+    $("resetBtn").className = "";
+    setStatus(mode === "proto"
+      ? '작전 대기 — 첫 스캔으로 공병 작업 개시<span class="blink">_</span>'
+      : '해역 스캔 대기 중<span class="blink">_</span>', "");
+    loadBest();
+    fx.parts = [];
+    resizeFx();
+    $("apron").style.height = mode === "proto" ? els[0].offsetHeight * 3 + "px" : "0px";
+    resetProto();
+    setSpeed(1);                       // 새 게임은 항상 1배속으로 시작
+    resizeWar();
+  }
+
+  function placeMines(safeIdx) {
+    const banned = new Set([safeIdx, ...neighbors(safeIdx)]);
+    let placed = 0;
+    while (placed < mines) {
+      const i = (Math.random() * grid.length) | 0;
+      if (grid[i].mine || banned.has(i)) continue;
+      grid[i].mine = true; placed++;
+    }
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i].mine) continue;
+      grid[i].adj = neighbors(i).filter((n) => grid[n].mine).length;
+    }
+  }
+
+  // 마스터 루프에서 호출 — 실경과×배속 누적이라 타이머 스로틀에도 정확
+  function missionTick(now) {
+    timeAcc += (now - timeLastT) / 1000 * gameSpeed;
+    timeLastT = now;
+    const t = Math.floor(timeAcc);
+    if (t !== time) { time = t; $("timer").textContent = pad3(time); }
+  }
+
+  function startTimer() {
+    timeAcc = time;
+    timeLastT = performance.now();
+    timerOn = true;
+  }
+
+  function setStatus(html, cls) {
+    const s = $("status");
+    s.innerHTML = html;
+    s.className = "status" + (cls ? " " + cls : "");
+  }
+
+  /* ---------- THE WAVE ---------- */
+  function ripple(centerIdx, opts = {}) {
+    if (reduceMotion) return;
+    const cr = (centerIdx / cols) | 0, cc = centerIdx % cols;
+    const radius = opts.radius || WAVE_RADIUS;
+    const r0 = Math.max(0, Math.ceil(cr - radius)), r1 = Math.min(rows - 1, Math.floor(cr + radius));
+    const c0 = Math.max(0, Math.ceil(cc - radius)), c1 = Math.min(cols - 1, Math.floor(cc + radius));
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const d = Math.hypot(r - cr, c - cc);
+      if (d > radius) continue;
+      const el = els[idx(r, c)];
+      const amp = Math.min(1.3, (1 - d / (radius + 0.8)) * (opts.boost || 1)); // decay with distance
+      el.classList.remove("wave");
+      void el.offsetWidth;                            // restart if mid-animation
+      el.style.setProperty("--wy", (-9 * amp).toFixed(1) + "px");
+      el.style.setProperty("--ws", (1 + 0.07 * amp).toFixed(3));
+      el.style.setProperty("--wb", (1.4 + 0.55 * amp).toFixed(2)); // near = brighter, far ≈ current
+
+      el.style.animationDelay = Math.round(d * WAVE_STEP_MS) + "ms";
+      el.classList.add("wave");
+    }
+  }
+
+  // 클릭한 타일만 짧게 반짝 — 웨이브는 깃발·폭발 전용
+  function flashCell(i) {
+    if (reduceMotion) return;
+    const el = els[i];
+    el.classList.remove("flash");
+    void el.offsetWidth;
+    el.classList.add("flash");
+  }
+
+  function ping(i, color) {
+    if (reduceMotion) return;
+    const el = els[i];
+    const p = document.createElement("div");
+    p.className = "ping" + (color ? " " + color : "");
+    p.style.left = el.offsetLeft + el.offsetWidth / 2 + "px";
+    p.style.top = el.offsetTop + el.offsetHeight / 2 + "px";
+    wrap.appendChild(p);
+    p.addEventListener("animationend", () => p.remove(), { once: true });
+  }
+
+  /* ---------- debris particles (single canvas overlay) ---------- */
+  const fx = { canvas: $("fx"), ctx: null, parts: [], running: false, last: 0, w: 0, h: 0 };
+  try { fx.ctx = fx.canvas.getContext("2d"); } catch (e) {}
+
+  function resizeFx() {
+    if (!fx.ctx) return;
+    const w = board.offsetWidth, h = board.offsetHeight;
+    const dpr = window.devicePixelRatio || 1;
+    fx.canvas.width = Math.round(w * dpr);
+    fx.canvas.height = Math.round(h * dpr);
+    fx.canvas.style.width = w + "px";
+    fx.canvas.style.height = h + "px";
+    fx.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fx.w = w; fx.h = h;
+  }
+  window.addEventListener("resize", resizeFx);
+
+  function spawnShards(i, cfg) {
+    if (reduceMotion || !fx.ctx) return;
+    if (fx.parts.length > 1000) return;                      // safety cap
+    const el = els[i];
+    const cx = el.offsetLeft + el.offsetWidth / 2;
+    const cy = el.offsetTop + el.offsetHeight / 2;
+    const n = fx.parts.length > 600 ? Math.ceil(cfg.n / 2) : cfg.n;
+    for (let k = 0; k < n; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = cfg.speed * (0.4 + Math.random() * 0.9);
+      fx.parts.push({
+        x: cx, y: cy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - cfg.up * (0.5 + Math.random()),
+        rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 12,
+        s: cfg.size[0] + Math.random() * (cfg.size[1] - cfg.size[0]),
+        c: cfg.colors[(Math.random() * cfg.colors.length) | 0],
+        t: 0, ttl: cfg.ttl * (0.7 + Math.random() * 0.6),
+        g: cfg.g,
+      });
+    }
+    if (!fx.running) { fx.running = true; fx.last = performance.now(); scheduleFx(); }
+  }
+
+  // rAF with a setTimeout fallback so particles still run when rAF is throttled
+  function scheduleFx() {
+    fx.raf = requestAnimationFrame(fxTick);
+    fx.timer = setTimeout(fxTick, 40);
+  }
+
+  function fxTick() {
+    cancelAnimationFrame(fx.raf);
+    clearTimeout(fx.timer);
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - fx.last) / 1000);
+    fx.last = now;
+    const ctx = fx.ctx;
+    ctx.clearRect(0, 0, fx.w, fx.h);
+    fx.parts = fx.parts.filter((p) => (p.t += dt) < p.ttl);
+    for (const p of fx.parts) {
+      p.vy += p.g * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vr * dt;
+      ctx.globalAlpha = 1 - p.t / p.ttl;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    if (fx.parts.length) scheduleFx();
+    else { fx.running = false; ctx.clearRect(0, 0, fx.w, fx.h); }
+  }
+
+  board.addEventListener("animationend", (e) => {
+    const el = e.target;
+    if (el.classList && el.classList.contains("wave") && e.animationName === "wave") {
+      el.classList.remove("wave");
+      el.style.animationDelay = "";
+    }
+    if (e.animationName === "cellFlash") el.classList.remove("flash");
+  });
+
+  /* ---------- reveal logic ---------- */
+  function paintOpen(i) {
+    const cell = grid[i], el = els[i];
+    el.classList.add("open");
+    el.classList.remove("flagged");
+    if (cell.adj > 0) {
+      el.innerHTML = '<span class="n' + cell.adj + '">' + cell.adj + "</span>";
+    } else {
+      el.innerHTML = "";
+    }
+    spawnShards(i, SHARD_OPEN);                       // tile shatters as it opens
+  }
+
+  function floodReveal(startIdx) {
+    // state updates immediately; visuals stagger by BFS depth
+    const q = [[startIdx, 0]];
+    const seen = new Set([startIdx]);
+    let revealedAny = false, opened = 0;
+    while (q.length) {
+      const [i, d] = q.shift();
+      const cell = grid[i];
+      if (cell.open || cell.flag) continue;
+      cell.open = true; openCount++; revealedAny = true; opened++;
+      if (d === 0) paintOpen(i);
+      else setTimeout(() => paintOpen(i), d * REVEAL_STEP_MS);
+      if (d > 0 && d % 2 === 0 && !reduceMotion) setTimeout(() => SFX.tick(), d * REVEAL_STEP_MS);
+      if (cell.adj === 0) {
+        for (const n of neighbors(i)) {
+          if (!seen.has(n) && !grid[n].mine) { seen.add(n); q.push([n, d + 1]); }
+        }
+      }
+    }
+    if (opened && mode === "proto" && phase === "sweep") {
+      // 스캔 성과만큼 돌격이 늦춰진다 — 시작 시간을 넘지는 못한다
+      prepLeft = Math.min(PROTO.prep[diff], prepLeft + opened * PROTO.openBonus);
+      updatePrepBar();
+      flashPrepGain();
+    }
+    return revealedAny;
+  }
+
+  function reveal(i) {
+    const cell = grid[i];
+    if (cell.open || cell.flag) return;
+    if (!started) {
+      placeMines(i); started = true;
+      if (mode === "proto") beginPrep();
+      else { startTimer(); setStatus("스캔 진행 중…", ""); }
+    }
+    if (cell.mine) {
+      if (mode === "proto") { detonateMine(i, true); return; }
+      explode(i); return;
+    }
+    floodReveal(i);
+    SFX.ping();
+    checkWin();
+  }
+
+  function chord(i) {
+    const cell = grid[i];
+    if (!cell.open || cell.adj === 0) return;
+    const ns = neighbors(i);
+    // 깃발 + 폭발한 크레이터 모두 "식별된 지뢰"로 센다
+    const known = ns.filter((n) => grid[n].flag || grid[n].det).length;
+    if (known !== cell.adj) return;
+    for (const n of ns) {
+      if (over) break;
+      if (!grid[n].open && !grid[n].flag) {
+        if (grid[n].mine) {
+          if (mode === "proto") { detonateMine(n, true); continue; }
+          explode(n); return;
+        }
+        floodReveal(n);
+      }
+    }
+    SFX.ping();
+    checkWin();
+  }
+
+  /* ---------- endings ---------- */
+  function stopGame() {
+    over = true;
+    timerOn = false;
+  }
+
+  function explode(hitIdx) {
+    stopGame();
+    grid[hitIdx].open = true;
+    const hr = (hitIdx / cols) | 0, hc = hitIdx % cols;
+    els[hitIdx].classList.add("open", "boom");
+    els[hitIdx].innerHTML = '<div class="dot"></div>';
+    ping(hitIdx, "red");
+    ripple(hitIdx, { radius: 6, boost: 1.3 });
+    spawnShards(hitIdx, SHARD_BOOM);
+    SFX.boom();
+
+    // mines surface in a radial wave from the blast
+    for (let i = 0; i < grid.length; i++) {
+      const cell = grid[i], el = els[i];
+      const d = Math.hypot(((i / cols) | 0) - hr, (i % cols) - hc);
+      if (cell.mine && i !== hitIdx && !cell.flag) {
+        setTimeout(() => {
+          el.classList.add("open");
+          el.innerHTML = '<div class="dot"></div>';
+          spawnShards(i, SHARD_MINE);
+        }, 120 + d * 30);
+      } else if (!cell.mine && cell.flag) {
+        setTimeout(() => el.classList.add("wrong"), 120 + d * 30);
+      }
+    }
+    board.classList.add("shake");
+    $("resetBtn").textContent = "✕";
+    $("resetBtn").className = "lost";
+    setStatus("기뢰 폭발 — 임무 실패. ◎ 버튼으로 재출항", "lose");
+  }
+
+  function celebrateSweep() {
+    if (reduceMotion) return;
+    const cr = (rows - 1) / 2, cc = (cols - 1) / 2;
+    for (let i = 0; i < grid.length; i++) {
+      const d = Math.hypot(((i / cols) | 0) - cr, (i % cols) - cc);
+      const el = els[i];
+      el.style.animationDelay = Math.round(d * 45) + "ms";
+      el.classList.add("winwave");
+      setTimeout(() => { el.classList.remove("winwave"); el.style.animationDelay = ""; },
+        Math.round(d * 45) + 800);
+    }
+  }
+
+  function checkWin() {
+    if (over) return;
+    if (mode === "proto") {                        // 프로토에선 전체 스캔은 정찰 완료일 뿐, 승리가 아님
+      if (openCount === grid.length - mines && phase === "sweep")
+        setStatus("전 해역 스캔 완료 — 돌격 준비", "win");
+      return;
+    }
+    if (openCount !== grid.length - mines) return;
+    stopGame();
+    // auto-flag remaining mines
+    for (let i = 0; i < grid.length; i++) {
+      if (grid[i].mine && !grid[i].flag) {
+        grid[i].flag = true;
+        els[i].classList.add("flagged");
+        els[i].innerHTML = "<span>⚑</span>";
+      }
+    }
+    $("mineCount").textContent = pad3(0);
+    $("resetBtn").textContent = "✓";
+    $("resetBtn").className = "won";
+    setStatus("전 해역 정리 완료 — 임무 성공 · " + time + "초", "win");
+    saveBest(time);
+    SFX.win();
+
+    // celebratory sweep from board center
+    celebrateSweep();
+  }
+
+  /* ---------- flags ---------- */
+  function toggleFlag(i) {
+    const cell = grid[i];
+    if (cell.open) return;
+    cell.flag = !cell.flag;
+    flagCount += cell.flag ? 1 : -1;
+    const el = els[i];
+    el.classList.toggle("flagged", cell.flag);
+    el.innerHTML = cell.flag ? "<span>⚑</span>" : "";
+    updateMineReadout();
+    if (cell.flag) {
+      // shockwave + dust fire when the falling flag actually lands;
+      // if a button is still held at landing, the shockwave waits for release
+      const fire = () => {
+        if (grid[i] !== cell || !cell.flag) return;   // unflagged / new game meanwhile
+        ping(i, "amber");                             // 충격파 링만 — 타일 꿀렁은 없음
+        spawnShards(i, SHARD_FLAG);
+        SFX.flag();
+      };
+      setTimeout(() => {
+        if (anyButtonDown) pendingShock.push(fire);
+        else fire();
+      }, reduceMotion ? 0 : FLAG_IMPACT_MS);
+    } else {
+      SFX.unflag();
+    }
+  }
+
+  /* ================= 작전 프로토 (operation prototype) ================= */
+  const consoleEl = $("console");
+  const war = { canvas: $("war"), ctx: null };
+  try { war.ctx = war.canvas.getContext("2d"); } catch (e) {}
+
+  function resizeWar() {
+    if (!war.ctx) return;
+    const w = consoleEl.clientWidth, h = consoleEl.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    war.canvas.width = Math.round(w * dpr);
+    war.canvas.height = Math.round(h * dpr);
+    war.canvas.style.width = w + "px";
+    war.canvas.style.height = h + "px";
+    war.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (G) computeGeom();
+  }
+
+  function computeGeom() {
+    const conR = consoleEl.getBoundingClientRect();
+    const wrR = wrap.getBoundingClientRect();
+    const btnR = $("resetBtn").getBoundingClientRect();
+    const w = els[0].offsetWidth, h = els[0].offsetHeight;
+    const wrapX = wrR.left - conR.left, wrapY = wrR.top - conR.top;
+    G = {
+      w, h, wrapX, wrapY,
+      pitchX: cols > 1 ? els[1].offsetLeft - els[0].offsetLeft : w + 4,
+      pitchY: rows > 1 ? els[cols].offsetTop - els[0].offsetTop : h + 4,
+      colCX: Array.from({ length: cols }, (_, c) => wrapX + els[c].offsetLeft + w / 2),
+      rowCY: Array.from({ length: rows }, (_, r) => wrapY + els[r * cols].offsetTop + h / 2),
+      topY: wrapY + els[0].offsetTop,
+      botY: wrapY + els[0].offsetTop + board.offsetHeight,
+      bx: btnR.left + btnR.width / 2 - conR.left,
+      by: btnR.top + btnR.height / 2 - conR.top,
+    };
+  }
+
+  const rowAt = (y) => Math.floor((y - (G.rowCY[0] - G.pitchY / 2)) / G.pitchY);
+  // p = hp/max. 1 초과분은 빨간 링 위 노란 링으로 겹쳐 그린다
+  const ringSet = (p) => {
+    const el = $("hpRing");
+    el.style.setProperty("--hp", Math.max(0, Math.min(1, p)));
+    el.style.setProperty("--ovr", Math.max(0, Math.min(1, p - 1)));
+  };
+
+  function resetProto() {
+    phase = "idle";
+    detCount = 0; mistakeCount = 0;
+    $("toasts").innerHTML = "";
+    clearTimeout(resultTimer); hideResult();
+    soldiers = []; warParts = []; tracers = []; spawnBag = [];
+    bunker = null; G = null;
+    if (war.ctx) war.ctx.clearRect(0, 0, war.canvas.width, war.canvas.height);
+    $("prepBar").classList.remove("show");
+    $("prepFill").style.width = "100%";
+    $("hpRing").classList.remove("show");
+    ringSet(1);
+    $("resetBtn").classList.remove("enemy");
+    $("chargeBtn").classList.remove("show");
+    $("chargeBtn").textContent = "▶ 조기 돌격";
+  }
+
+  /* ---------- 랭킹 (공유 서버 자동 감지, 실패 시 이 브라우저 로컬 기록) ---------- */
+  const RANK_API = "api";                 // 전용 배포판(Worker)에서만 응답한다
+  const DIFF_LABEL = { easy: "초급", medium: "중급", hard: "고급" };
+  let rankShared = null;                  // null=미확인, true/false 판별 캐시
+  let rankSubmitted = false;
+
+  function localRanks() {
+    try { return JSON.parse(localStorage.getItem("sonar-rank-local") || "[]"); }
+    catch (e) { return []; }
+  }
+  const rankSort = (a, b) => b.s - a.s || a.t - b.t || a.m - b.m;
+  const localTop = (d) => localRanks().filter((r) => r.d === d).sort(rankSort).slice(0, 10);
+  function saveLocalRank(rec) {
+    const all = localRanks();
+    all.push(rec);
+    all.sort(rankSort);
+    try { localStorage.setItem("sonar-rank-local", JSON.stringify(all.slice(0, 100))); } catch (e) {}
+  }
+
+  async function fetchTop(d) {
+    if (rankShared === false) return { shared: false, rows: localTop(d) };
+    try {
+      const r = await fetch(RANK_API + "/top?d=" + d, { signal: AbortSignal.timeout(2500) });
+      if (!r.ok) throw 0;
+      const rows = await r.json();
+      if (!Array.isArray(rows)) throw 0;
+      rankShared = true;
+      return { shared: true, rows };
+    } catch (e) {
+      rankShared = false;
+      return { shared: false, rows: localTop(d) };
+    }
+  }
+
+  async function submitScore(rec) {
+    saveLocalRank(rec);                   // 공유 성공 여부와 무관하게 로컬에도 남긴다
+    if (rankShared === false) return false;
+    try {
+      const r = await fetch(RANK_API + "/score", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(rec),
+        signal: AbortSignal.timeout(2500),
+      });
+      if (!r.ok) throw 0;
+      rankShared = true;
+      return true;
+    } catch (e) {
+      if (rankShared !== true) rankShared = false;
+      return false;
+    }
+  }
+
+  function renderRankInto(scopeEl, listEl, res, d, mine) {
+    scopeEl.textContent = (res.shared ? "공유 랭킹" : "로컬 기록") + " — " + DIFF_LABEL[d];
+    listEl.innerHTML = "";
+    if (!res.rows.length) {
+      listEl.innerHTML = '<li class="rank-empty">아직 기록이 없습니다</li>';
+      return;
+    }
+    res.rows.slice(0, 10).forEach((r) => {
+      const li = document.createElement("li");
+      const sv = document.createElement("b");
+      sv.className = "rk-s";
+      sv.textContent = "생존 " + r.s;
+      li.append(r.n + " — ", sv, " · " + r.t + "초");
+      if (mine && r.n === mine.n && r.s === mine.s && r.t === mine.t && r.m === mine.m) li.className = "rank-mine";
+      listEl.appendChild(li);
+    });
+  }
+
+  function renderRanks(res, mine) {
+    renderRankInto($("rankScope"), $("rankList"), res, diff, mine);
+  }
+
+  /* 랭킹 뷰어 — 좌하단 버튼, 난이도 탭 */
+  function setRankTab(d) {
+    document.querySelectorAll("#rankTabs button").forEach((b) => b.classList.toggle("active", b.dataset.rd === d));
+    $("rankViewList").innerHTML = '<li class="rank-empty">불러오는 중…</li>';
+    fetchTop(d).then((res) => {
+      const active = document.querySelector("#rankTabs button.active");
+      if (active && active.dataset.rd === d)               // 탭 연타 시 최신 탭만 반영
+        renderRankInto($("rankViewScope"), $("rankViewList"), res, d, null);
+    });
+  }
+
+  $("rankBtn").addEventListener("click", () => {
+    SFX.ensure();
+    $("rankOverlay").classList.add("show");
+    setRankTab(diff);
+  });
+  $("rankTabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-rd]");
+    if (b) setRankTab(b.dataset.rd);
+  });
+  $("rankViewClose").addEventListener("click", () => $("rankOverlay").classList.remove("show"));
+  $("rankOverlay").addEventListener("click", (e) => {
+    if (e.target === $("rankOverlay")) $("rankOverlay").classList.remove("show");
+  });
+
+  function doSubmit() {
+    if (rankSubmitted) return;
+    const name = $("rankName").value.trim().slice(0, 12);
+    if (!name) { $("rankName").focus(); return; }
+    rankSubmitted = true;
+    try { localStorage.setItem("sonar-rank-name", name); } catch (e) {}
+    const rec = { n: name, d: diff, s: aliveCount, t: time, m: mistakeCount };
+    $("rankSave").disabled = true;
+    $("rankSave").textContent = "등록됨";
+    submitScore(rec).then(() => fetchTop(diff).then((res) => renderRanks(res, rec)));
+  }
+
+  /* ---------- 게임 결과 팝업 ---------- */
+  function hideResult() {
+    $("resultOverlay").classList.remove("show");
+    clearTimeout(countTimer);
+  }
+
+  function showResult(win) {
+    $("resultOverlay").classList.add("show");
+    const v = $("resultVerdict");
+    v.textContent = win ? "작전 성공" : "작전 실패";
+    v.className = "result-verdict " + (win ? "win" : "lose");
+    $("resultSub").textContent = "투입 " + troopsTotal + "명 · " + time + "초";
+    const cnt = $("resultCount");
+    cnt.className = "result-count";
+    cnt.textContent = "";
+    const target = aliveCount;
+    // 대형 반투명 숫자가 낙하해 꽂히는 스탬프 연출
+    countTimer = setTimeout(() => {
+      if (!$("resultOverlay").classList.contains("show")) return;   // 중간에 닫힘
+      cnt.textContent = target;
+      cnt.classList.add("stamp");
+      countTimer = setTimeout(() => {                               // 착지 임팩트
+        if (!$("resultOverlay").classList.contains("show")) return;
+        cnt.classList.add("final");
+        if (!win) cnt.classList.add("lose");
+        SFX.stamp();
+        const card = document.querySelector(".result-card");
+        card.classList.remove("impact");
+        void card.offsetWidth;
+        card.classList.add("impact");
+      }, 390);
+    }, 350);
+
+    // 랭킹 섹션 — 승리 시 호출명 등록(저장된 이름이면 자동), 패배 시 열람만
+    rankSubmitted = false;
+    $("rankNameRow").style.display = win ? "" : "none";
+    const nameEl = $("rankName");
+    try { nameEl.value = localStorage.getItem("sonar-rank-name") || ""; } catch (e) {}
+    $("rankSave").disabled = false;
+    $("rankSave").textContent = "기록 등록";
+    $("rankList").innerHTML = '<li class="rank-empty">불러오는 중…</li>';
+    if (win && nameEl.value.trim()) doSubmit();
+    else fetchTop(diff).then((res) => renderRanks(res, null));
+  }
+
+  $("rankSave").addEventListener("click", doSubmit);
+  $("rankName").addEventListener("keydown", (e) => { if (e.key === "Enter") doSubmit(); });
+
+  $("resultClose").addEventListener("click", hideResult);
+  $("resultOverlay").addEventListener("click", (e) => {
+    if (e.target === $("resultOverlay")) hideResult();
+  });
+
+  // 전장 이벤트 토스트 — 위에서 떠올랐다 2초 뒤 사라진다
+  function toast(msg, cls) {
+    const box = $("toasts");
+    const t = document.createElement("div");
+    t.className = "toast" + (cls ? " " + cls : "");
+    t.textContent = msg;
+    box.appendChild(t);
+    t.addEventListener("animationend", (e) => { if (e.animationName === "toastOut") t.remove(); });
+    setTimeout(() => t.remove(), 3200);          // reduced-motion 등 애니메이션 미발화 대비
+    while (box.children.length > 3) box.firstChild.remove();
+  }
+
+  // 남은 시간에 비례한 조기 돌격 증원 (최대 병력의 10%)
+  function earlyBonus() {
+    const frac = Math.max(0, prepLeft) / PROTO.prep[diff];
+    return Math.round(PROTO.troops[diff] * PROTO.earlyBonusMax * frac);
+  }
+
+  function updateChargeBtn() {
+    const b = earlyBonus();
+    $("chargeBtn").textContent = "▶ 조기 돌격" + (b > 0 ? " (+" + b + ")" : "");
+  }
+
+  function updatePrepBar() {
+    $("prepFill").style.width = Math.min(100, prepLeft / PROTO.prep[diff] * 100) + "%";
+    $("prepLabel").textContent = "돌격까지 " + Math.ceil(prepLeft) + "초";
+  }
+
+  function flashPrepGain() {
+    const f = $("prepFill");
+    f.classList.add("gain");
+    clearTimeout(flashPrepGain.t);
+    flashPrepGain.t = setTimeout(() => f.classList.remove("gain"), 280);
+  }
+
+  function beginPrep() {
+    phase = "sweep";
+    prepLeft = PROTO.prep[diff];
+    $("chargeBtn").classList.add("show");
+    $("prepBar").classList.add("show");
+    $("hpRing").classList.add("show");          // 타이머 시작부터 적 벙커 HP 노출
+    $("resetBtn").classList.add("enemy");
+    ringSet(1 + mistakeCount * PROTO.mistakeHp);
+    updateChargeBtn();
+    updatePrepBar();
+    setStatus("공병 작업 중 — 돌격까지 " + prepLeft + "초", "");
+    prepLastT = performance.now();
+  }
+
+  function prepTick(now) {
+    prepLeft -= (now - prepLastT) / 1000 * gameSpeed;
+    prepLastT = now;
+    if (prepLeft <= 0) { startAssault(); return; }
+    updatePrepBar();
+    updateChargeBtn();
+    setStatus("공병 작업 중 — 돌격까지 " + Math.ceil(prepLeft) + "초", "");
+  }
+
+  function startAssault() {
+    if (phase !== "sweep") return;
+    phase = "assault";
+    $("chargeBtn").classList.remove("show");
+    $("prepBar").classList.remove("show");
+    time = 0; $("timer").textContent = "000";
+    startTimer();
+    computeGeom();
+    const baseHp = PROTO.hp[diff];
+    const bonus = mistakeCount * Math.round(baseHp * PROTO.mistakeHp);
+    bunker = { hp: baseHp + bonus, max: baseHp, nextFire: 0, flash: 0, burst: 0 };
+    ringSet(bunker.hp / bunker.max);
+    $("hpRing").classList.add("show");
+    $("resetBtn").classList.add("enemy");
+    const eb = earlyBonus();
+    troopsTotal = PROTO.troops[diff] + eb;             // 조기 돌격 증원 합류
+    spawnLeft = troopsTotal; aliveCount = 0; spawnClock = 0.3; statusClock = 0;
+    spawnBag = [];
+    while (spawnBag.length < troopsTotal) {
+      const cs = Array.from({ length: cols }, (_, c) => c);
+      for (let k = cs.length - 1; k > 0; k--) {
+        const j = (Math.random() * (k + 1)) | 0;
+        [cs[k], cs[j]] = [cs[j], cs[k]];
+      }
+      spawnBag.push(...cs);
+    }
+    spawnBag.length = troopsTotal;
+    SFX.horn();
+    statusAssault();
+    toast(eb > 0 ? "돌격 개시 — 증원 +" + eb + "명!" : "돌격 개시!", "amber");
+    warNow = 0;
+  }
+
+  // rAF + setTimeout 폴백 — rAF가 스로틀돼도 전투는 계속 진행된다 (fx 파편과 동일 패턴)
+  function scheduleWar() {
+    warRaf = requestAnimationFrame(warTick);
+    warTimer = setTimeout(warTick, 40);
+  }
+
+  function statusAssault() {
+    if (phase !== "assault") return;
+    setStatus("돌격 중 — 생존 " + aliveCount + "/" + troopsTotal, "");
+  }
+
+  function pushWarBurst(x, y, cfg) {
+    for (let k = 0; k < cfg.n; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = cfg.speed * (0.4 + Math.random() * 0.9);
+      warParts.push({
+        x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - cfg.up * (0.5 + Math.random()),
+        rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 12,
+        s: cfg.size[0] + Math.random() * (cfg.size[1] - cfg.size[0]),
+        c: cfg.colors[(Math.random() * cfg.colors.length) | 0],
+        t: 0, ttl: cfg.ttl * (0.7 + Math.random() * 0.6), g: cfg.g,
+      });
+    }
+  }
+
+  function killSoldier(s) {
+    if (s.st === "dead") return;
+    s.st = "dead"; aliveCount--;
+    pushWarBurst(s.x, s.y, SHARD_KILL);
+    SFX.die();
+    statusAssault();
+  }
+
+  function detonateMine(i, byPlayer) {
+    const cell = grid[i];
+    if (!cell.mine || cell.det || cell.flag) return;
+    cell.det = true; cell.open = true;
+    detCount++;
+    const el = els[i];
+    el.classList.add("open", "boom");
+    el.innerHTML = '<div class="dot"></div>';
+    ping(i, "red");
+    ripple(i, { radius: 4, boost: 1.15 });
+    spawnShards(i, SHARD_BOOM);
+    SFX.boom();
+    updateMineReadout();
+    if (byPlayer && mode === "proto" && phase !== "done") {
+      mistakeCount++;
+      if (bunker) {                                  // 돌격 중 오폭 → 즉시 강화
+        bunker.hp += Math.round(bunker.max * PROTO.mistakeHp);
+        ringSet(bunker.hp / bunker.max);
+      } else {
+        ringSet(1 + mistakeCount * PROTO.mistakeHp); // 공병 단계 — 예정 HP% 갱신
+      }
+      const ring = $("hpRing");                      // HP 증가 강조 — 링이 부풀며 번쩍
+      ring.classList.remove("surge");
+      void ring.offsetWidth;
+      ring.classList.add("surge");
+      setStatus("지뢰 오폭! 적 벙커 강화 +" + Math.round(PROTO.mistakeHp * 100) + "%", "lose");
+      toast("적 벙커 HP +" + Math.round(PROTO.mistakeHp * 100) + "%", "red");
+    }
+    if (phase === "assault" && G) {
+      const bx = G.wrapX + el.offsetLeft + el.offsetWidth / 2;
+      const by = G.wrapY + el.offsetTop + el.offsetHeight / 2;
+      const rad = PROTO.blastTiles * G.pitchX;
+      let killed = 0;
+      for (const s of soldiers) {
+        if (s.st !== "dead" && Math.hypot(s.x - bx, s.y - by) < rad) { killSoldier(s); killed++; }
+      }
+      if (killed) toast("지뢰 폭발 — 병사 " + killed + "명 전사", "red");
+      checkDefeat(warNow);
+    }
+  }
+
+  function laneFor(s) {
+    const r = rowAt(s.y - G.h * 0.6);              // 반 타일쯤 앞을 보고 차선을 정한다
+    if (r < 0 || r >= rows) return G.colCX[s.col];
+    if (!grid[idx(r, s.col)].flag) return G.colCX[s.col];
+    const rightBad = s.col + 1 < cols && grid[idx(r, s.col + 1)].flag ? 1 : 0;
+    const leftBad = s.col - 1 >= 0 && grid[idx(r, s.col - 1)].flag ? 1 : 0;
+    const goRight = s.col === 0 ? true : s.col === cols - 1 ? false : rightBad <= leftBad;
+    return G.colCX[s.col] + (goRight ? 1 : -1) * G.pitchX / 2;
+  }
+
+  function updateSoldier(s, dt, now) {
+    if (s.st === "fight") {
+      if (now >= s.nextHit) {
+        s.nextHit = now + PROTO.hitMs + (s.seed % 180);
+        s.kick = now;
+        bunker.hp--;
+        ringSet(bunker.hp / bunker.max);
+        tracers.push({ x1: s.x, y1: s.y, x2: G.bx + Math.cos(s.ang) * 26, y2: G.by + Math.sin(s.ang) * 26, until: now + 90, c: "#7FE8C0" });
+        pushWarBurst(G.bx + Math.cos(s.ang) * 26, G.by + Math.sin(s.ang) * 26,
+          { n: 3, speed: 70, up: 30, colors: ["#FFD27A", "#FF9B6B"], size: [1, 2.5], ttl: 0.3, g: 400 });
+        SFX.thud();
+        statusAssault();
+        if (bunker.hp <= 0) victory(now);
+      }
+      return;
+    }
+    if (s.st !== "march") return;
+    if (s.y > G.topY) {
+      s.prevY = s.y;
+      s.y -= PROTO.speed * dt;
+      const lx = laneFor(s);
+      const maxDx = PROTO.speed * 2.6 * dt;
+      s.x += Math.max(-maxDx, Math.min(maxDx, lx - s.x));
+      // 타일 중앙을 밟는 순간에만 지뢰가 격발된다 (틈새 통과는 안전)
+      const r = rowAt(s.y);
+      if (r >= 0 && r < rows && Math.abs(s.x - G.colCX[s.col]) < G.w * 0.22) {
+        const cy = G.rowCY[r];
+        if (s.prevY > cy && s.y <= cy) {
+          const cell = grid[idx(r, s.col)];
+          if (cell.mine && !cell.flag && !cell.det) detonateMine(idx(r, s.col), false);
+        }
+      }
+    } else {
+      const dx = G.bx - s.x, dy = G.by - s.y, d = Math.hypot(dx, dy) || 1;
+      if (d < PROTO.attackDist + (s.seed % 10)) {
+        s.st = "fight";
+        s.ang = Math.atan2(s.y - G.by, s.x - G.bx);
+        s.nextHit = now + 250 + (s.seed % 350);
+      } else {
+        const sp = PROTO.speed * PROTO.sprintMul;   // 개활지 돌격 가속
+        s.x += dx / d * sp * dt;
+        s.y += dy / d * sp * dt;
+      }
+    }
+  }
+
+  function bunkerStep(now) {
+    if (now < bunker.nextFire) return;
+    const range = PROTO.rangeTiles * G.pitchX;
+    let best = null, bd = Infinity;
+    for (const s of soldiers) {
+      if (s.st === "dead") continue;
+      const d = Math.hypot(s.x - G.bx, s.y - G.by);
+      if (d < range && d < bd) { bd = d; best = s; }
+    }
+    if (!best) { bunker.nextFire = now + 90; return; }
+    tracers.push({ x1: G.bx, y1: G.by, x2: best.x, y2: best.y, until: now + 160 });
+    bunker.flash = now;
+    best.hp--;
+    if (best.hp <= 0) killSoldier(best);
+    else {
+      best.hurt = now;                              // 첫 발은 부상 — 두 발째에 전사
+      pushWarBurst(best.x, best.y, { n: 3, speed: 80, up: 35, colors: ["#FF9B6B", "#FFD27A"], size: [1, 2.5], ttl: 0.3, g: 420 });
+      SFX.thud();
+    }
+    SFX.shot();
+    bunker.burst++;
+    if (bunker.burst >= PROTO.burstShots) {
+      bunker.burst = 0;
+      bunker.nextFire = now + PROTO.reloadMs;      // 장전
+    } else {
+      bunker.nextFire = now + PROTO.burstGapMs;    // 땅땅땅땅땅
+    }
+    checkDefeat(now);
+  }
+
+  function spawnStep(dt) {
+    if (!spawnLeft) return;
+    spawnClock -= dt;
+    if (spawnClock > 0) return;
+    spawnClock = PROTO.spawnMs / 1000 * (0.75 + Math.random() * 0.5);
+    const col = spawnBag.length ? spawnBag.pop() : (Math.random() * cols) | 0;
+    spawnLeft--;
+    soldiers.push({
+      col, x: G.colCX[col] + (Math.random() * 8 - 4), y: G.botY + G.pitchY * 3 - 6 + Math.random() * 12,
+      st: "march", seed: (Math.random() * 1000) | 0, prevY: 1e9, kick: 0, ang: -Math.PI / 2, nextHit: 0,
+      hp: PROTO.soldierHp, hurt: 0,
+    });
+    aliveCount++;
+    statusAssault();
+  }
+
+  function checkDefeat(now) {
+    if (phase === "assault" && spawnLeft === 0 && aliveCount <= 0) defeat(now);
+  }
+
+  function victory(now) {
+    phase = "done"; doneAt = now; over = true;
+    timerOn = false;
+    for (const s of soldiers) if (s.st === "fight" || s.st === "march") s.st = "cheer";
+    ringSet(0);
+    pushWarBurst(G.bx, G.by,
+      { n: 30, speed: 220, up: 110, colors: ["#FF5D5D", "#FF9B6B", "#FFD27A", "#7A1D1D"], size: [2, 5], ttl: 0.8, g: 420 });
+    $("resetBtn").textContent = "✓";
+    $("resetBtn").className = "won";
+    setStatus("작전 성공 — 벙커 파괴 · 생존 " + aliveCount + "/" + troopsTotal + " · " + time + "초", "win");
+    toast("벙커 파괴 — 작전 성공!", "teal");
+    SFX.boom(); SFX.win();
+    celebrateSweep();
+    clearTimeout(resultTimer);
+    resultTimer = setTimeout(() => showResult(true), 2000);
+  }
+
+  function defeat(now) {
+    if (phase !== "assault") return;
+    phase = "done"; doneAt = now; over = true;
+    timerOn = false;
+    $("resetBtn").textContent = "✕";
+    $("resetBtn").className = "lost";
+    setStatus("작전 실패 — 전 병력 손실. ◎ 버튼으로 재편성", "lose");
+    toast("전 병력 손실 — 작전 실패", "red");
+    SFX.boom();
+    clearTimeout(resultTimer);
+    resultTimer = setTimeout(() => showResult(false), 2000);
+  }
+
+  // 상시 구동 마스터 루프 — 카운트다운·미션 타이머·전투가 전부 여기서 진행된다
+  function warTick() {
+    cancelAnimationFrame(warRaf);
+    clearTimeout(warTimer);
+    const now = performance.now();
+    const rawDt = Math.min(0.1, (now - warLast) / 1000);
+    warLast = now;
+    const dt = rawDt * gameSpeed;        // 가속 배율 — 전투 시뮬레이션 전체에 적용
+    warNow += dt * 1000;
+    if (phase === "sweep") prepTick(now);
+    if (timerOn) missionTick(now);
+    if (phase === "assault") {
+      spawnStep(dt);
+      bunkerStep(warNow);
+      for (const s of soldiers) {
+        if (phase !== "assault") break;
+        updateSoldier(s, dt, warNow);
+      }
+      checkDefeat(warNow);
+      statusClock += rawDt;
+      if (statusClock > 1) { statusClock = 0; statusAssault(); }
+    }
+    warParts = warParts.filter((p) => (p.t += dt) < p.ttl);
+    for (const p of warParts) {
+      p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    }
+    drawWar(warNow);
+    if (phase === "done" && warNow > doneAt + 3500) {
+      soldiers.length = 0; tracers.length = 0;   // 종전 후 정리 — 루프는 계속 돈다
+    }
+    scheduleWar();
+  }
+
+  function drawWar(now) {
+    const ctx = war.ctx;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, consoleEl.clientWidth, consoleEl.clientHeight);
+    // 예광탄 — 적탄(벙커)은 굵은 레드 2중선, 아군탄은 얇은 틸 (피아 식별)
+    tracers = tracers.filter((t) => t.until > now);
+    for (const t of tracers) {
+      if (t.c) {                                     // 아군 사격
+        ctx.globalAlpha = Math.max(0, (t.until - now) / 90);
+        ctx.strokeStyle = t.c;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2); ctx.stroke();
+        continue;
+      }
+      const a = Math.max(0, (t.until - now) / 160);  // 적 벙커 사격
+      ctx.globalAlpha = a * 0.4;
+      ctx.strokeStyle = "#FF5D5D";
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2); ctx.stroke();
+      ctx.globalAlpha = a;
+      ctx.strokeStyle = "#FFB3A0";
+      ctx.lineWidth = 3.2;
+      ctx.beginPath(); ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // bunker muzzle flash ring
+    if (bunker && now - bunker.flash < 90 && G) {
+      ctx.globalAlpha = (1 - (now - bunker.flash) / 90) * 0.8;
+      ctx.strokeStyle = "#FFD27A";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(G.bx, G.by, 34, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // soldiers
+    for (const s of soldiers) {
+      if (s.st === "dead") continue;
+      let x = s.x, y = s.y;
+      if (s.st === "march") x += Math.sin(now * 0.012 + s.seed) * 1.4;
+      if (s.st === "cheer") y -= Math.abs(Math.sin(now * 0.008 + s.seed)) * 5;
+      if (s.st === "fight" && now - s.kick < 120) {
+        const k = 1 - (now - s.kick) / 120;
+        x += Math.cos(s.ang) * 3 * k; y += Math.sin(s.ang) * 3 * k;
+      }
+      // rifle — 병사 크기 120%
+      ctx.strokeStyle = "#2E8F68"; ctx.lineWidth = 2.4;
+      const gx = s.st === "fight" ? -Math.cos(s.ang) * 10 : 0;
+      const gy = s.st === "fight" ? -Math.sin(s.ang) * 10 : -10;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + gx, y + gy); ctx.stroke();
+      // body + helmet — 부상병은 색이 바랜다
+      const wounded = s.hp === 1;
+      ctx.fillStyle = wounded ? "#E8C48F" : "#8FE8C4";
+      ctx.beginPath(); ctx.arc(x, y, 5.2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = wounded ? "#8A6A34" : "#1F6B4C";
+      ctx.beginPath(); ctx.arc(x, y, 5.2, Math.PI, Math.PI * 2); ctx.fill();
+      // 피격 순간 플래시 링
+      if (s.hurt && now - s.hurt < 150) {
+        ctx.globalAlpha = 1 - (now - s.hurt) / 150;
+        ctx.strokeStyle = "#FFD27A"; ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+    // debris
+    for (const p of warParts) {
+      ctx.globalAlpha = 1 - p.t / p.ttl;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ---------- input ---------- */
+  let pressTimer = null, suppressClick = false;
+
+  // waves fire only while no button is held — deferred shockwaves wait for release
+  let anyButtonDown = false, pendingShock = [];
+  window.addEventListener("pointerdown", () => { anyButtonDown = true; }, true);
+  const onRelease = (e) => {
+    if (e.buttons !== 0) return;
+    anyButtonDown = false;
+    if (pendingShock.length) { const q = pendingShock; pendingShock = []; q.forEach((fn) => fn()); }
+  };
+  window.addEventListener("pointerup", onRelease, true);
+  window.addEventListener("pointercancel", onRelease, true);
+
+  board.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  board.addEventListener("pointerdown", (e) => {
+    const el = e.target.closest(".cell");
+    if (!el) return;
+    const i = +el.dataset.i;
+    SFX.ensure();
+    if (e.pointerType === "touch") {             // long-press = flag
+      pressTimer = setTimeout(() => {
+        pressTimer = null;
+        if (!over) { toggleFlag(i); suppressClick = true; }
+      }, 380);
+    }
+  });
+  board.addEventListener("pointerup", () => {
+    clearTimeout(pressTimer); pressTimer = null;
+  });
+  board.addEventListener("pointercancel", () => { clearTimeout(pressTimer); pressTimer = null; });
+
+  board.addEventListener("click", (e) => {
+    const el = e.target.closest(".cell");
+    if (!el) return;
+    if (suppressClick) { suppressClick = false; return; }
+    const i = +el.dataset.i;
+    if (over) return;
+    flashCell(i);
+    if (flagMode && !grid[i].open) { toggleFlag(i); return; }
+    if (grid[i].open) chord(i);
+    else reveal(i);
+  });
+
+  board.addEventListener("contextmenu", (e) => {
+    const el = e.target.closest(".cell");
+    if (!el || over) return;
+    toggleFlag(+el.dataset.i);                   // wave arrives with the flag, not the click
+  });
+
+  /* ---------- controls ---------- */
+  $("resetBtn").addEventListener("click", () => { SFX.ensure(); newGame(); });
+
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-d]");
+    if (!b) return;
+    diff = b.dataset.d;
+    document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x === b));
+    newGame();
+  });
+
+  $("soundBtn").addEventListener("click", () => {
+    SFX.on = !SFX.on;
+    $("soundBtn").textContent = SFX.on ? "♪ 소리 켜짐" : "♪ 소리 꺼짐";
+  });
+
+  $("flagModeBtn").addEventListener("click", () => {
+    flagMode = !flagMode;
+    $("flagModeBtn").classList.toggle("on", flagMode);
+  });
+
+  $("chargeBtn").addEventListener("click", () => { SFX.ensure(); startAssault(); });
+
+  function setSpeed(x) {
+    gameSpeed = x;
+    document.querySelectorAll("#speedBtns button").forEach((b) => b.classList.toggle("active", +b.dataset.s === x));
+  }
+
+  $("speedBtns").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-s]");
+    if (!b) return;
+    setSpeed(+b.dataset.s);
+  });
+
+  window.addEventListener("resize", resizeWar);
+
+  newGame();
+  warLast = performance.now();
+  scheduleWar();                     // 마스터 루프 기동 (상시)
+})();
+</script>
+

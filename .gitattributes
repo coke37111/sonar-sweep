@@ -1,0 +1,6 @@
+public/*.html text eol=lf
+public/*.css text eol=lf
+public/*.js text eol=lf
+public/*.json text eol=lf
+scripts/*.mjs text eol=lf
+tests/*.mjs text eol=lf

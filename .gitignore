@@ -2,3 +2,5 @@ node_modules/
 .wrangler/
 .dev.vars
 *.log
+.cache/
+jp/build/

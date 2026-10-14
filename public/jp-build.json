@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "slug": "sonar-sweep",
+  "engine": "html5",
+  "version": "1.0.0",
+  "rules": "sonar-portal-v1"
+}

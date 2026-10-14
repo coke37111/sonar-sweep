@@ -474,19 +474,13 @@
   .result-sub{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.1em;margin-top:6px}
   .rank-sec{margin-top:16px;border-top:1px solid var(--panel-edge);padding-top:14px;min-width:250px}
   .rank-head{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--muted);margin-bottom:8px}
-  .rank-name-row{display:flex;gap:6px;justify-content:center;margin-bottom:10px}
-  #rankName{
-    font-family:var(--mono);font-size:12px;letter-spacing:.08em;width:130px;
-    background:#050B13;border:1px solid var(--line);border-radius:6px;
-    color:var(--text);padding:6px 10px;outline:none;text-align:center;
+  #rankLogin{
+    font-family:var(--mono);font-size:14px;letter-spacing:.1em;padding:10px 22px;margin:0 0 12px;
+    border-radius:8px;border:1px solid #ffcf33;background:#ffcf33;
+    color:#101820;font-weight:800;cursor:pointer;
   }
-  #rankName:focus{border-color:var(--accent)}
-  #rankSave{
-    font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:6px 14px;
-    border-radius:6px;border:1px solid var(--accent);background:var(--accent);
-    color:#04110C;font-weight:700;cursor:pointer;
-  }
-  #rankSave:disabled{opacity:.55;cursor:default}
+  #rankLogin:disabled{opacity:.55;cursor:default}
+  #rankLogin[hidden]{display:none}
   #rankList,#rankViewList{
     list-style:none;margin:0;padding:0;counter-reset:rk;
     font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--text);
